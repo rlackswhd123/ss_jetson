@@ -12,7 +12,7 @@
 - 하단 ROI 5분할 기반 `GO`, `TURN_LEFT`, `TURN_RIGHT` 판단
 - 3프레임 연속 판단 안정화
 - `/map` OccupancyGrid 지도 표시
-- `/pose` PoseStamped 기반 구루마 위치와 방향 표시
+- `/pose` PoseWithCovarianceStamped 기반 구루마 위치와 방향 표시
 - 고정 목적지와 직선 점선 경로 표시
 - 지도 화면과 카메라 화면을 좌우로 합성
 
@@ -157,7 +157,8 @@ ros2 topic list
 /pose
 ```
 
-`/pose` 타입이 `geometry_msgs/msg/PoseStamped`가 아니면 `lidar_map_subscriber.py`를 실제 타입에 맞게 조정해야 한다.
+`/pose` 타입은 slam_toolbox 기준 `geometry_msgs/msg/PoseWithCovarianceStamped`를 사용한다.
+다른 SLAM 또는 localization 노드가 다른 pose 타입을 발행하면 `lidar_map_subscriber.py`를 실제 타입에 맞게 조정해야 한다.
 
 ```bash
 ros2 topic info /pose

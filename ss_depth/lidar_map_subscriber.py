@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 import math
 from typing import Any
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import OccupancyGrid
 
 from ss_depth import config
@@ -26,7 +26,7 @@ class LidarMapSubscriber:
       10,
     )
     self._pose_subscription = node.create_subscription(
-      PoseStamped,
+      PoseWithCovarianceStamped,
       config.POSE_TOPIC,
       self._on_pose,
       10,
@@ -39,9 +39,9 @@ class LidarMapSubscriber:
   def _on_map(self, msg: OccupancyGrid):
     self._state.occupancy_grid = msg
 
-  def _on_pose(self, msg: PoseStamped):
-    position = msg.pose.position
-    orientation = msg.pose.orientation
+  def _on_pose(self, msg: PoseWithCovarianceStamped):
+    position = msg.pose.pose.position
+    orientation = msg.pose.pose.orientation
     self._state.robot_pose = RobotPose(
       x=position.x,
       y=position.y,
