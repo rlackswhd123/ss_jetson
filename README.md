@@ -117,6 +117,13 @@ cd ~/ss_robot_ws/src/ss_depth
 ./scripts/start_dashboard_terminals.sh
 ```
 
+열어둔 터미널과 실행 중인 노드를 한 번에 종료하려면 아래 스크립트를 사용한다.
+
+```bash
+cd ~/ss_robot_ws/src/ss_depth
+./scripts/stop_dashboard_terminals.sh
+```
+
 workspace 경로나 SLAM 설정 파일 위치가 다르면 환경변수로 바꿀 수 있다.
 
 ```bash
