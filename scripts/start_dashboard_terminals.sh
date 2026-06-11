@@ -28,24 +28,51 @@ open_terminal() {
 
 if [ ! -f "$WORKSPACE_DIR/install/setup.bash" ]; then
   echo "Missing workspace setup: $WORKSPACE_DIR/install/setup.bash" >&2
-  echo "Build the workspace first: cd $WORKSPACE_DIR && colcon build --packages-select ss_depth" >&2
+  echo "Build the workspace first:" >&2
+  echo "  cd $WORKSPACE_DIR" >&2
+  echo "  source /opt/ros/jazzy/setup.bash" >&2
+  echo "  colcon build --symlink-install" >&2
   exit 1
 fi
 
-open_terminal "ss_depth realsense" \
-  "ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true"
+if ! bash -lc "$SETUP_COMMAND && ros2 pkg executables ros2_laser_scan_matcher | grep -q '^ros2_laser_scan_matcher laser_scan_matcher$'"; then
+  echo "Missing executable: ros2_laser_scan_matcher laser_scan_matcher" >&2
+  echo "Build it first:" >&2
+  echo "  cd $WORKSPACE_DIR" >&2
+  echo "  source /opt/ros/jazzy/setup.bash" >&2
+  echo "  colcon build --symlink-install --packages-select csm ros2_laser_scan_matcher ss_depth" >&2
+  exit 1
+fi
+
+if [ ! -f "$SLAM_PARAMS_FILE" ]; then
+  echo "Missing SLAM params file: $SLAM_PARAMS_FILE" >&2
+  exit 1
+fi
 
 open_terminal "ss_depth lidar" \
   "ros2 launch sllidar_ros2 sllidar_a2m7_launch.py"
 
+sleep 2
+
 open_terminal "ss_depth laser tf" \
   "ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base_link laser"
+
+sleep 1
 
 open_terminal "ss_depth odom" \
   "$ODOM_COMMAND"
 
+sleep 4
+
 open_terminal "ss_depth slam" \
   "ros2 launch slam_toolbox online_async_launch.py slam_params_file:=$SLAM_PARAMS_FILE"
+
+sleep 3
+
+open_terminal "ss_depth realsense" \
+  "ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true"
+
+sleep 2
 
 open_terminal "ss_depth dashboard" \
   "ros2 run ss_depth dashboard_node"

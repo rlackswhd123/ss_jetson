@@ -25,7 +25,7 @@ class DashboardNode(Node):
     self._map_view_renderer = MapViewRenderer()
     self._path_planner = PathPlanner()
     self._dashboard_renderer = DashboardRenderer()
-    self._goal = PathPoint(x=config.DEFAULT_GOAL_X_M, y=config.DEFAULT_GOAL_Y_M)
+    self._goal: PathPoint | None = None
     self._timer = self.create_timer(config.DASHBOARD_TIMER_SEC, self._on_timer)
     self.get_logger().info("ss_depth dashboard node started")
 
