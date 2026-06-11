@@ -18,10 +18,10 @@ class MapViewRenderer:
     if occupancy_grid is None:
       view = self._render_waiting_view(direction)
     else:
-      view = self._render_map(occupancy_grid)
-      self._draw_path(view, occupancy_grid, path_points)
-      self._draw_robot(view, occupancy_grid, robot_pose)
-      self._draw_goal(view, occupancy_grid, path_points)
+      view = self._render_heading_up_map(occupancy_grid, robot_pose)
+      self._draw_path(view, occupancy_grid, robot_pose, path_points)
+      self._draw_goal(view, occupancy_grid, robot_pose, path_points)
+      self._draw_robot(view)
 
     self._draw_direction(view, direction)
     return view
@@ -45,7 +45,28 @@ class MapViewRenderer:
     )
     return view
 
-  def _render_map(self, occupancy_grid: Any):
+  def _render_heading_up_map(self, occupancy_grid: Any, robot_pose: RobotPose):
+    raw_map = self._build_raw_map_image(occupancy_grid)
+    robot_pixel = self._world_to_raw_pixel(occupancy_grid, robot_pose.x, robot_pose.y)
+
+    center_x = config.MAP_VIEW_WIDTH / 2.0
+    center_y = config.MAP_VIEW_HEIGHT / 2.0
+    angle_deg = 90.0 - np.degrees(robot_pose.yaw_rad)
+
+    matrix = cv2.getRotationMatrix2D(robot_pixel, angle_deg, 1.0)
+    matrix[0, 2] += center_x - robot_pixel[0]
+    matrix[1, 2] += center_y - robot_pixel[1]
+
+    return cv2.warpAffine(
+      raw_map,
+      matrix,
+      (config.MAP_VIEW_WIDTH, config.MAP_VIEW_HEIGHT),
+      flags=cv2.INTER_NEAREST,
+      borderMode=cv2.BORDER_CONSTANT,
+      borderValue=(36, 36, 36),
+    )
+
+  def _build_raw_map_image(self, occupancy_grid: Any):
     width = occupancy_grid.info.width
     height = occupancy_grid.info.height
     data = np.asarray(occupancy_grid.data, dtype=np.int16).reshape((height, width))
@@ -54,27 +75,37 @@ class MapViewRenderer:
     gray[data == 0] = 245
     gray[data > 50] = 25
     gray = np.flipud(gray)
-    color = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-    return cv2.resize(
-      color,
-      (config.MAP_VIEW_WIDTH, config.MAP_VIEW_HEIGHT),
-      interpolation=cv2.INTER_NEAREST,
-    )
+    return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
-  def _draw_path(self, view, occupancy_grid: Any, path_points: list[PathPoint]):
+  def _draw_path(
+    self,
+    view,
+    occupancy_grid: Any,
+    robot_pose: RobotPose,
+    path_points: list[PathPoint],
+  ):
     if len(path_points) < 2:
       return
 
-    pixels = [self._world_to_pixel(occupancy_grid, point.x, point.y) for point in path_points]
+    pixels = [
+      self._world_to_heading_up_pixel(occupancy_grid, robot_pose, point.x, point.y)
+      for point in path_points
+    ]
     for start, end in zip(pixels, pixels[1:]):
       self._draw_dotted_line(view, start, end, (0, 170, 255), 2)
 
-  def _draw_goal(self, view, occupancy_grid: Any, path_points: list[PathPoint]):
+  def _draw_goal(
+    self,
+    view,
+    occupancy_grid: Any,
+    robot_pose: RobotPose,
+    path_points: list[PathPoint],
+  ):
     if not path_points:
       return
 
     goal = path_points[-1]
-    center = self._world_to_pixel(occupancy_grid, goal.x, goal.y)
+    center = self._world_to_heading_up_pixel(occupancy_grid, robot_pose, goal.x, goal.y)
     cv2.circle(view, center, 8, (0, 80, 255), -1)
     cv2.putText(
       view,
@@ -87,20 +118,21 @@ class MapViewRenderer:
       cv2.LINE_AA,
     )
 
-  def _draw_robot(self, view, occupancy_grid: Any, robot_pose: RobotPose):
-    center = self._world_to_pixel(occupancy_grid, robot_pose.x, robot_pose.y)
-    forward = np.array([np.cos(robot_pose.yaw_rad), -np.sin(robot_pose.yaw_rad)])
-    side = np.array([-forward[1], forward[0]])
+  def _draw_robot(self, view):
+    center = np.array(
+      [config.MAP_VIEW_WIDTH // 2, config.MAP_VIEW_HEIGHT // 2],
+      dtype=np.int32,
+    )
     points = np.array(
       [
-        np.array(center) + forward * 18,
-        np.array(center) - forward * 12 + side * 10,
-        np.array(center) - forward * 12 - side * 10,
+        center + np.array([0, -20]),
+        center + np.array([-12, 14]),
+        center + np.array([12, 14]),
       ],
       dtype=np.int32,
     )
     cv2.fillConvexPoly(view, points, (30, 120, 255))
-    cv2.circle(view, center, 3, (0, 0, 0), -1)
+    cv2.circle(view, tuple(center), 3, (0, 0, 0), -1)
 
   def _draw_direction(self, view, direction: Direction):
     color = (0, 220, 0)
@@ -115,13 +147,32 @@ class MapViewRenderer:
       cv2.LINE_AA,
     )
 
-  def _world_to_pixel(self, occupancy_grid: Any, x_m: float, y_m: float) -> tuple[int, int]:
+  def _world_to_raw_pixel(self, occupancy_grid: Any, x_m: float, y_m: float) -> tuple[float, float]:
     info = occupancy_grid.info
     origin = info.origin.position
     map_x = (x_m - origin.x) / info.resolution
     map_y = (y_m - origin.y) / info.resolution
-    pixel_x = int(map_x * config.MAP_VIEW_WIDTH / info.width)
-    pixel_y = int((info.height - map_y) * config.MAP_VIEW_HEIGHT / info.height)
+    return (float(map_x), float(info.height - map_y))
+
+  def _world_to_heading_up_pixel(
+    self,
+    occupancy_grid: Any,
+    robot_pose: RobotPose,
+    x_m: float,
+    y_m: float,
+  ) -> tuple[int, int]:
+    pixels_per_meter = 1.0 / occupancy_grid.info.resolution
+
+    dx = x_m - robot_pose.x
+    dy = y_m - robot_pose.y
+
+    cos_yaw = np.cos(robot_pose.yaw_rad)
+    sin_yaw = np.sin(robot_pose.yaw_rad)
+    local_forward = cos_yaw * dx + sin_yaw * dy
+    local_left = -sin_yaw * dx + cos_yaw * dy
+
+    pixel_x = config.MAP_VIEW_WIDTH / 2.0 - local_left * pixels_per_meter
+    pixel_y = config.MAP_VIEW_HEIGHT / 2.0 - local_forward * pixels_per_meter
     return (
       int(np.clip(pixel_x, 0, config.MAP_VIEW_WIDTH - 1)),
       int(np.clip(pixel_y, 0, config.MAP_VIEW_HEIGHT - 1)),
