@@ -53,7 +53,7 @@ class MapViewRenderer:
     center_y = config.MAP_VIEW_HEIGHT / 2.0
     angle_deg = 90.0 - np.degrees(robot_pose.yaw_rad)
 
-    matrix = cv2.getRotationMatrix2D(robot_pixel, angle_deg, 1.0)
+    matrix = cv2.getRotationMatrix2D(robot_pixel, angle_deg, config.MAP_VIEW_SCALE)
     matrix[0, 2] += center_x - robot_pixel[0]
     matrix[1, 2] += center_y - robot_pixel[1]
 
@@ -161,7 +161,7 @@ class MapViewRenderer:
     x_m: float,
     y_m: float,
   ) -> tuple[int, int]:
-    pixels_per_meter = 1.0 / occupancy_grid.info.resolution
+    pixels_per_meter = config.MAP_VIEW_SCALE / occupancy_grid.info.resolution
 
     dx = x_m - robot_pose.x
     dy = y_m - robot_pose.y
