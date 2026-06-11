@@ -3,6 +3,8 @@ DEPTH_TOPIC = "/camera/camera/aligned_depth_to_color/image_raw"
 
 MAP_TOPIC = "/map"
 POSE_TOPIC = "/pose"
+MAP_FRAME = "map"
+BASE_FRAME = "base_link"
 
 ROI_HEIGHT_RATIO = 0.6
 SECTION_COUNT = 5

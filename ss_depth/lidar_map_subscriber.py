@@ -4,6 +4,8 @@ from typing import Any
 
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import OccupancyGrid
+from rclpy.time import Time
+from tf2_ros import Buffer, TransformException, TransformListener
 
 from ss_depth import config
 from ss_depth.types import RobotPose
@@ -19,6 +21,8 @@ class LidarMapSubscriber:
   def __init__(self, node: Any):
     self._node = node
     self._state = LidarMapState()
+    self._tf_buffer = Buffer()
+    self._tf_listener = TransformListener(self._tf_buffer, node)
     self._map_subscription = node.create_subscription(
       OccupancyGrid,
       config.MAP_TOPIC,
@@ -34,6 +38,7 @@ class LidarMapSubscriber:
 
   @property
   def state(self) -> LidarMapState:
+    self._update_pose_from_tf()
     return self._state
 
   def _on_map(self, msg: OccupancyGrid):
@@ -50,6 +55,29 @@ class LidarMapSubscriber:
         orientation.y,
         orientation.z,
         orientation.w,
+      ),
+    )
+
+  def _update_pose_from_tf(self):
+    try:
+      transform = self._tf_buffer.lookup_transform(
+        config.MAP_FRAME,
+        config.BASE_FRAME,
+        Time(),
+      )
+    except TransformException:
+      return
+
+    translation = transform.transform.translation
+    rotation = transform.transform.rotation
+    self._state.robot_pose = RobotPose(
+      x=translation.x,
+      y=translation.y,
+      yaw_rad=self._quaternion_to_yaw(
+        rotation.x,
+        rotation.y,
+        rotation.z,
+        rotation.w,
       ),
     )
 

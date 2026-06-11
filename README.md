@@ -12,7 +12,7 @@
 - 하단 ROI 5분할 기반 `GO`, `TURN_LEFT`, `TURN_RIGHT` 판단
 - 3프레임 연속 판단 안정화
 - `/map` OccupancyGrid 지도 표시
-- `/pose` PoseWithCovarianceStamped 기반 구루마 위치와 방향 표시
+- TF `map -> base_link` 우선, `/pose` fallback 기반 구루마 위치와 방향 표시
 - 고정 목적지와 직선 점선 경로 표시
 - 지도 화면과 카메라 화면을 좌우로 합성
 
@@ -25,6 +25,8 @@ COLOR_TOPIC = "/camera/camera/color/image_raw"
 DEPTH_TOPIC = "/camera/camera/aligned_depth_to_color/image_raw"
 MAP_TOPIC = "/map"
 POSE_TOPIC = "/pose"
+MAP_FRAME = "map"
+BASE_FRAME = "base_link"
 ```
 
 Jetson에서 실제 토픽명이 다르면 `config.py`를 먼저 수정한다.
@@ -91,6 +93,7 @@ sudo apt install -y \
   ros-jazzy-realsense2-camera \
   ros-jazzy-cv-bridge \
   ros-jazzy-slam-toolbox \
+  ros-jazzy-tf2-ros \
   python3-numpy \
   python3-opencv
 ```
@@ -107,6 +110,30 @@ source install/setup.bash
 
 ## Jetson 실행 순서
 
+한 번에 여러 터미널을 열어 실행하려면 아래 스크립트를 사용한다.
+
+```bash
+cd ~/ss_robot_ws/src/ss_depth
+./scripts/start_dashboard_terminals.sh
+```
+
+workspace 경로나 SLAM 설정 파일 위치가 다르면 환경변수로 바꿀 수 있다.
+
+```bash
+WORKSPACE_DIR=~/ss_robot_ws \
+SLAM_PARAMS_FILE=~/ss_robot_ws/config/lidar_only_slam.yaml \
+./scripts/start_dashboard_terminals.sh
+```
+
+기본 odometry 실행 명령은 `ros2_laser_scan_matcher` 기준이다. 다른 odometry 노드를 쓸 때는 `ODOM_COMMAND`만 바꾼다.
+
+```bash
+ODOM_COMMAND='ros2 run <odometry-package> <odometry-node>' \
+./scripts/start_dashboard_terminals.sh
+```
+
+아래는 문제가 생겼을 때 개별로 확인하기 위한 수동 실행 순서이다.
+
 터미널 1에서 RealSense를 실행한다.
 
 ```bash
@@ -115,7 +142,44 @@ source ~/ss_robot_ws/install/setup.bash
 ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true
 ```
 
-터미널 2에서 LiDAR/SLAM을 실행한다.
+터미널 2에서 LiDAR를 실행한다.
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ss_robot_ws/install/setup.bash
+ros2 launch sllidar_ros2 sllidar_a2m7_launch.py
+```
+
+터미널 3에서 LiDAR 장착 위치 TF를 실행한다.
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ss_robot_ws/install/setup.bash
+ros2 run tf2_ros static_transform_publisher \
+  0 0 0 0 0 0 \
+  base_link laser
+```
+
+터미널 4에서 `odom -> base_link`를 발행하는 odometry 또는 scan matcher를 실행한다.
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ss_robot_ws/install/setup.bash
+ros2 run <odometry-package> <odometry-node>
+```
+
+예를 들어 `ros2_laser_scan_matcher`를 사용한다면 아래처럼 실행한다.
+
+```bash
+ros2 run ros2_laser_scan_matcher laser_scan_matcher \
+  --ros-args \
+  -p publish_odom:=/odom \
+  -p publish_tf:=true
+```
+
+`odom -> base_link`는 static transform으로 고정하면 안 된다. 고정하면 구루마가 움직이거나 회전해도 대시보드 위치와 방향이 변하지 않는다.
+
+터미널 5에서 LiDAR/SLAM을 실행한다.
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -124,7 +188,7 @@ ros2 launch slam_toolbox online_async_launch.py \
   slam_params_file:=/home/susoft/ss_robot_ws/config/lidar_only_slam.yaml
 ```
 
-터미널 3에서 대시보드를 실행한다.
+터미널 6에서 대시보드를 실행한다.
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -157,11 +221,11 @@ ros2 topic list
 /pose
 ```
 
-`/pose` 타입은 slam_toolbox 기준 `geometry_msgs/msg/PoseWithCovarianceStamped`를 사용한다.
-다른 SLAM 또는 localization 노드가 다른 pose 타입을 발행하면 `lidar_map_subscriber.py`를 실제 타입에 맞게 조정해야 한다.
+구루마 위치와 방향은 TF `map -> base_link`를 우선 사용한다. TF가 아직 없으면 `/pose`를 fallback으로 사용한다.
 
 ```bash
 ros2 topic info /pose
+ros2 run tf2_ros tf2_echo map base_link
 ```
 
 ## 화면 확인 기준

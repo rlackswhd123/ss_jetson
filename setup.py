@@ -12,6 +12,7 @@ setup(
     ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
     (f"share/{package_name}", ["package.xml", "README.md"]),
     (f"share/{package_name}/launch", ["launch/dashboard.launch.py"]),
+    (f"share/{package_name}/scripts", ["scripts/start_dashboard_terminals.sh"]),
   ],
   install_requires=["setuptools"],
   zip_safe=True,
