@@ -3,7 +3,7 @@ set -euo pipefail
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/ss_robot_ws}"
 SLAM_PARAMS_FILE="${SLAM_PARAMS_FILE:-$WORKSPACE_DIR/config/lidar_only_slam.yaml}"
-ODOM_COMMAND="${ODOM_COMMAND:-ros2 run ros2_laser_scan_matcher laser_scan_matcher --ros-args -p publish_odom:=/odom -p publish_tf:=true}"
+ODOM_COMMAND="${ODOM_COMMAND:-ros2 run ros2_laser_scan_matcher laser_scan_matcher --ros-args -p publish_odom:=/odom -p publish_tf:=true -p max_iterations:=6}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_DIR="${SS_DEPTH_STATE_DIR:-/tmp/ss_depth_dashboard}"
 

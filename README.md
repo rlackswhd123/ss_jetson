@@ -181,7 +181,8 @@ ros2 run <odometry-package> <odometry-node>
 ros2 run ros2_laser_scan_matcher laser_scan_matcher \
   --ros-args \
   -p publish_odom:=/odom \
-  -p publish_tf:=true
+  -p publish_tf:=true \
+  -p max_iterations:=6
 ```
 
 `odom -> base_link`는 static transform으로 고정하면 안 된다. 고정하면 구루마가 움직이거나 회전해도 대시보드 위치와 방향이 변하지 않는다.
