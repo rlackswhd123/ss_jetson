@@ -1,3 +1,4 @@
+import math
 import time
 
 import cv2
@@ -8,8 +9,10 @@ from ss_depth import config
 from ss_depth.camera_view_renderer import CameraViewRenderer
 from ss_depth.dashboard_renderer import DashboardRenderer
 from ss_depth.depth_obstacle_detector import DepthObstacleDetector
-from ss_depth.direction_decider import DirectionDecider
+from ss_depth.goal_aware_direction_decider import GoalAwareDirectionDecider
+from ss_depth.goal_manager import GoalManager
 from ss_depth.lidar_map_subscriber import LidarMapSubscriber
+from ss_depth.map_coordinate_transformer import MapCoordinateTransformer
 from ss_depth.map_view_renderer import MapViewRenderer
 from ss_depth.path_planner import PathPlanner
 from ss_depth.realsense_subscriber import RealsenseSubscriber
@@ -22,19 +25,23 @@ class DashboardNode(Node):
     self._realsense_subscriber = RealsenseSubscriber(self)
     self._lidar_map_subscriber = LidarMapSubscriber(self)
     self._depth_obstacle_detector = DepthObstacleDetector()
-    self._direction_decider = DirectionDecider()
+    self._direction_decider = GoalAwareDirectionDecider()
+    self._goal_manager = GoalManager()
+    self._map_coordinate_transformer = MapCoordinateTransformer()
     self._camera_view_renderer = CameraViewRenderer()
     self._map_view_renderer = MapViewRenderer()
     self._path_planner = PathPlanner()
     self._dashboard_renderer = DashboardRenderer()
-    self._goal: PathPoint | None = None
     self._last_perf_log_at = 0.0
     self._frame_index = 0
     self._last_obstacle_boxes = []
     self._last_section_analyses = []
-    self._last_direction = self._direction_decider.decide([])
+    self._last_direction = self._direction_decider.decide([], None)
     self._last_map_view = None
+    self._last_map_state = self._lidar_map_subscriber.state
     self._timer = self.create_timer(config.DASHBOARD_TIMER_SEC, self._on_timer)
+    cv2.namedWindow(config.DASHBOARD_WINDOW_NAME)
+    cv2.setMouseCallback(config.DASHBOARD_WINDOW_NAME, self._on_mouse_event)
     self.get_logger().info("ss_depth dashboard node started")
 
   def _on_timer(self):
@@ -47,13 +54,15 @@ class DashboardNode(Node):
     depth_detect_ms = (time.perf_counter() - started_at) * 1000.0
 
     started_at = time.perf_counter()
-    direction = self._direction_decider.decide(section_analyses)
+    map_state = self._lidar_map_subscriber.state
+    self._last_map_state = map_state
+    heading_error = self._calculate_heading_error(map_state.robot_pose, self._goal_manager.goal)
+    direction = self._direction_decider.decide(section_analyses, heading_error)
     self._last_direction = direction
     direction_ms = (time.perf_counter() - started_at) * 1000.0
 
     started_at = time.perf_counter()
-    map_state = self._lidar_map_subscriber.state
-    path_points = self._path_planner.build_path(map_state.robot_pose, goal=self._goal)
+    path_points = self._path_planner.build_path(map_state.robot_pose, goal=self._goal_manager.goal)
     path_ms = (time.perf_counter() - started_at) * 1000.0
 
     started_at = time.perf_counter()
@@ -75,7 +84,8 @@ class DashboardNode(Node):
 
     started_at = time.perf_counter()
     cv2.imshow(config.DASHBOARD_WINDOW_NAME, dashboard_view)
-    cv2.waitKey(config.WAIT_KEY_DELAY_MS)
+    key = cv2.waitKey(config.WAIT_KEY_DELAY_MS)
+    self._handle_key(key)
     display_ms = (time.perf_counter() - started_at) * 1000.0
     total_ms = (time.perf_counter() - total_started_at) * 1000.0
 
@@ -147,6 +157,57 @@ class DashboardNode(Node):
         direction,
       )
     return self._last_map_view
+
+  def _on_mouse_event(self, event, x, y, flags, param):
+    _ = flags
+    _ = param
+    if event != cv2.EVENT_LBUTTONDOWN:
+      return
+    if x < 0 or x >= config.MAP_VIEW_WIDTH:
+      return
+    if y < 0 or y >= config.MAP_VIEW_HEIGHT:
+      return
+
+    map_state = self._last_map_state
+    goal = self._map_coordinate_transformer.heading_up_pixel_to_world(
+      map_state.occupancy_grid,
+      map_state.robot_pose,
+      x,
+      y,
+    )
+    if goal is None:
+      self.get_logger().warn("cannot set goal before LiDAR map is available")
+      return
+
+    self._goal_manager.set_goal(goal.x, goal.y)
+    self._last_map_view = None
+    self.get_logger().info(f"goal set x={goal.x:.2f} y={goal.y:.2f}")
+
+  def _handle_key(self, key: int):
+    if key < 0:
+      return
+    key_code = key & 0xFF
+    if key_code not in (ord("c"), ord("C")):
+      return
+    if not self._goal_manager.has_goal():
+      return
+    self._goal_manager.clear_goal()
+    self._last_map_view = None
+    self.get_logger().info("goal cleared")
+
+  def _calculate_heading_error(self, robot_pose, goal: PathPoint | None) -> float | None:
+    if goal is None:
+      return None
+
+    target_yaw = math.atan2(goal.y - robot_pose.y, goal.x - robot_pose.x)
+    return self._normalize_angle(target_yaw - robot_pose.yaw_rad)
+
+  def _normalize_angle(self, angle: float) -> float:
+    while angle > math.pi:
+      angle -= 2.0 * math.pi
+    while angle < -math.pi:
+      angle += 2.0 * math.pi
+    return angle
 
 
 def main(args=None):

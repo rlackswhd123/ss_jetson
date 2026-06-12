@@ -13,7 +13,8 @@
 - 3프레임 연속 판단 안정화
 - `/map` OccupancyGrid 지도 표시
 - TF `map -> base_link` 우선, `/pose` fallback 기반 구루마 위치와 방향 표시
-- 고정 목적지와 직선 점선 경로 표시
+- 지도 클릭 기반 목표점 설정과 직선 점선 경로 표시
+- 목표점이 있으면 카메라 화살표가 현재 yaw 기준 목표 방향을 우선 표시
 - 지도 화면과 카메라 화면을 좌우로 합성
 
 ## 주요 토픽
@@ -33,11 +34,13 @@ Jetson에서 실제 토픽명이 다르면 `config.py`를 먼저 수정한다.
 
 ## MacBook 개발 기준
 
-MacBook에서는 주로 코드 작성과 문법 확인만 진행한다.
+MacBook에서는 주로 코드 작성과 문법 확인, 하드웨어가 필요 없는 단위 테스트만 진행한다.
 
 ```bash
 cd /Users/saeumsoft/Desktop/ss_robot
 python3 -B -c 'import ast, pathlib; [ast.parse(path.read_text()) for path in pathlib.Path("ss_depth/ss_depth").glob("*.py")]; print("syntax ok")'
+cd /Users/saeumsoft/Desktop/ss_robot/ss_depth
+python3 -m unittest discover -s tests
 ```
 
 MacBook에 ROS2, `rclpy`, `cv_bridge`, RealSense 장비가 없으면 실제 실행 검증은 할 수 없다.
@@ -242,7 +245,9 @@ ros2 run tf2_ros tf2_echo map base_link
 - 카메라 앞 0.4m 이내 물체에 bbox와 `Obstacle 0.38m` 형식의 거리 텍스트가 표시된다.
 - 가까운 장애물 위치에 따라 `GO`, `TURN_LEFT`, `TURN_RIGHT`가 표시된다.
 - `/map`이 들어오면 왼쪽에 LiDAR 지도가 표시된다.
-- 지도 위에 구루마 위치, 방향, 고정 목적지, 직선 점선 경로가 표시된다.
+- 왼쪽 지도 화면을 클릭하면 목표점이 설정되고, 목표점과 현재 위치 사이에 직선 점선 경로가 표시된다.
+- 목표점이 있으면 오른쪽 카메라 화면의 초록색 화살표는 목표점 방향을 우선 표시하고, 목표 방향이 막혔을 때만 회피 방향을 표시한다.
+- `c` 키를 누르면 목표점이 취소되고 기존 장애물 회피 화살표 표시로 돌아간다.
 
 ## 문제 확인
 
