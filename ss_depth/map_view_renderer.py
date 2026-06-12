@@ -217,19 +217,12 @@ class MapViewRenderer:
     if distance == 0:
       return distance_offset
 
-    dash_length = 12.0
-    gap_length = 12.0
-    pattern_length = dash_length + gap_length
-    steps = max(1, int(distance))
-    for step in range(steps):
-      segment_start = distance * step / steps
-      segment_end = distance * (step + 1) / steps
-      pattern_position = (distance_offset + segment_start) % pattern_length
-      if pattern_position >= dash_length:
-        continue
-      t1 = segment_start / distance
-      t2 = segment_end / distance
-      p1 = start_point + (end_point - start_point) * t1
-      p2 = start_point + (end_point - start_point) * t2
-      cv2.line(view, tuple(p1.astype(int)), tuple(p2.astype(int)), color, thickness)
+    dot_gap = 12.0
+    first_dot = 0.0 if distance_offset == 0 else dot_gap - (distance_offset % dot_gap)
+    dot_distance = first_dot
+    while dot_distance <= distance:
+      t = dot_distance / distance
+      point = start_point + (end_point - start_point) * t
+      cv2.circle(view, tuple(point.astype(int)), thickness, color, -1)
+      dot_distance += dot_gap
     return distance_offset + distance
