@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import math
+import time
 from typing import Any
 
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -23,6 +24,7 @@ class LidarMapSubscriber:
     self._state = LidarMapState()
     self._tf_buffer = Buffer()
     self._tf_listener = TransformListener(self._tf_buffer, node)
+    self._last_tf_lookup_at = 0.0
     self._map_subscription = node.create_subscription(
       OccupancyGrid,
       config.MAP_TOPIC,
@@ -59,6 +61,10 @@ class LidarMapSubscriber:
     )
 
   def _update_pose_from_tf(self):
+    now = time.perf_counter()
+    if now - self._last_tf_lookup_at < config.TF_LOOKUP_INTERVAL_SEC:
+      return
+    self._last_tf_lookup_at = now
     try:
       transform = self._tf_buffer.lookup_transform(
         config.MAP_FRAME,

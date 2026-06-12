@@ -13,10 +13,15 @@ class DepthObstacleDetector:
     depth_m = self._to_meter_depth(depth_image)
     roi_top = int(depth_m.shape[0] * (1.0 - config.ROI_HEIGHT_RATIO))
     roi_depth = depth_m[roi_top:, :]
+    scale = config.DEPTH_DETECT_DOWNSCALE
+    if 0.0 < scale < 1.0:
+      resized_width = max(1, int(roi_depth.shape[1] * scale))
+      resized_height = max(1, int(roi_depth.shape[0] * scale))
+      roi_depth = cv2.resize(roi_depth, (resized_width, resized_height), interpolation=cv2.INTER_NEAREST)
     valid_mask = self._build_valid_mask(roi_depth)
     near_mask = self._build_near_mask(roi_depth, valid_mask)
 
-    obstacle_boxes = self._find_obstacle_boxes(roi_depth, near_mask, roi_top)
+    obstacle_boxes = self._find_obstacle_boxes(roi_depth, near_mask, roi_top, scale)
     section_analyses = self._analyze_sections(roi_depth, valid_mask, near_mask)
     return obstacle_boxes, section_analyses
 
@@ -47,6 +52,7 @@ class DepthObstacleDetector:
     roi_depth: np.ndarray,
     near_mask: np.ndarray,
     roi_top: int,
+    scale: float,
   ) -> list[ObstacleBox]:
     component_mask = near_mask.astype(np.uint8)
     component_count, labels, stats, _ = cv2.connectedComponentsWithStats(
@@ -66,6 +72,12 @@ class DepthObstacleDetector:
       height = int(stats[label, cv2.CC_STAT_HEIGHT])
       component_depth = roi_depth[labels == label]
       median_distance_m = float(np.median(component_depth))
+      if 0.0 < scale < 1.0:
+        inv_scale = 1.0 / scale
+        x = int(x * inv_scale)
+        y = int(y * inv_scale)
+        width = max(1, int(width * inv_scale))
+        height = max(1, int(height * inv_scale))
       obstacle_boxes.append(
         ObstacleBox(
           x=x,

@@ -259,4 +259,4 @@ colcon build --packages-select ss_depth
 source install/setup.bash
 ```
 
-기본 설정은 Jetson CPU 부하를 줄이기 위해 대시보드 갱신 주기를 약 12.5fps로 낮추고, depth 검출과 map 렌더를 2프레임마다 한 번씩만 다시 계산한다. 더 부드럽게 보이고 싶으면 `ss_depth/config.py`의 `DASHBOARD_TIMER_SEC`, `DEPTH_DETECT_INTERVAL_FRAMES`, `MAP_RENDER_INTERVAL_FRAMES`를 조정한다.
+기본 설정은 Jetson CPU 부하를 줄이기 위해 대시보드 갱신 주기를 약 12.5fps로 낮추고, depth 검출과 map 렌더를 2프레임마다 한 번씩만 다시 계산한다. 표시 패널은 `640x480`으로 낮췄고, depth 검출은 ROI 축소본 기준으로 수행하며 TF 조회도 짧게 캐시한다. 더 부드럽게 보이고 싶으면 `ss_depth/config.py`의 `DASHBOARD_TIMER_SEC`, `DEPTH_DETECT_INTERVAL_FRAMES`, `MAP_RENDER_INTERVAL_FRAMES`, `DEPTH_DETECT_DOWNSCALE`를 조정한다.
