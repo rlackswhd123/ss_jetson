@@ -8,6 +8,10 @@ from ss_depth.types import Direction, PathPoint, RobotPose
 
 
 class MapViewRenderer:
+  def __init__(self):
+    self._cached_occupancy_grid: Any = None
+    self._cached_raw_map_image: Any = None
+
   def render(
     self,
     occupancy_grid: Any,
@@ -46,7 +50,7 @@ class MapViewRenderer:
     return view
 
   def _render_heading_up_map(self, occupancy_grid: Any, robot_pose: RobotPose):
-    raw_map = self._build_raw_map_image(occupancy_grid)
+    raw_map = self._get_raw_map_image(occupancy_grid)
     robot_pixel = self._world_to_raw_pixel(occupancy_grid, robot_pose.x, robot_pose.y)
 
     center_x = config.MAP_VIEW_WIDTH / 2.0
@@ -65,6 +69,12 @@ class MapViewRenderer:
       borderMode=cv2.BORDER_CONSTANT,
       borderValue=(36, 36, 36),
     )
+
+  def _get_raw_map_image(self, occupancy_grid: Any):
+    if occupancy_grid is not self._cached_occupancy_grid:
+      self._cached_occupancy_grid = occupancy_grid
+      self._cached_raw_map_image = self._build_raw_map_image(occupancy_grid)
+    return self._cached_raw_map_image
 
   def _build_raw_map_image(self, occupancy_grid: Any):
     width = occupancy_grid.info.width
