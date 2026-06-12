@@ -29,19 +29,26 @@ class DashboardNode(Node):
     self._dashboard_renderer = DashboardRenderer()
     self._goal: PathPoint | None = None
     self._last_perf_log_at = 0.0
+    self._frame_index = 0
+    self._last_obstacle_boxes = []
+    self._last_section_analyses = []
+    self._last_direction = self._direction_decider.decide([])
+    self._last_map_view = None
     self._timer = self.create_timer(config.DASHBOARD_TIMER_SEC, self._on_timer)
     self.get_logger().info("ss_depth dashboard node started")
 
   def _on_timer(self):
+    self._frame_index += 1
     total_started_at = time.perf_counter()
     frames = self._realsense_subscriber.frames
 
     started_at = time.perf_counter()
-    obstacle_boxes, section_analyses = self._depth_obstacle_detector.detect(frames.depth_image)
+    obstacle_boxes, section_analyses = self._get_depth_analysis(frames.depth_image)
     depth_detect_ms = (time.perf_counter() - started_at) * 1000.0
 
     started_at = time.perf_counter()
     direction = self._direction_decider.decide(section_analyses)
+    self._last_direction = direction
     direction_ms = (time.perf_counter() - started_at) * 1000.0
 
     started_at = time.perf_counter()
@@ -54,7 +61,7 @@ class DashboardNode(Node):
     camera_render_ms = (time.perf_counter() - started_at) * 1000.0
 
     started_at = time.perf_counter()
-    map_view = self._map_view_renderer.render(
+    map_view = self._get_map_view(
       map_state.occupancy_grid,
       map_state.robot_pose,
       path_points,
@@ -119,6 +126,27 @@ class DashboardNode(Node):
       f"timer_target={config.DASHBOARD_TIMER_SEC * 1000.0:.1f}ms "
       f"has_map={has_map} has_color={has_color} has_depth={has_depth}"
     )
+
+  def _get_depth_analysis(self, depth_image):
+    if (
+      self._frame_index % config.DEPTH_DETECT_INTERVAL_FRAMES == 1
+      or not self._last_section_analyses
+    ):
+      self._last_obstacle_boxes, self._last_section_analyses = self._depth_obstacle_detector.detect(depth_image)
+    return self._last_obstacle_boxes, self._last_section_analyses
+
+  def _get_map_view(self, occupancy_grid, robot_pose, path_points, direction):
+    if (
+      self._frame_index % config.MAP_RENDER_INTERVAL_FRAMES == 1
+      or self._last_map_view is None
+    ):
+      self._last_map_view = self._map_view_renderer.render(
+        occupancy_grid,
+        robot_pose,
+        path_points,
+        direction,
+      )
+    return self._last_map_view
 
 
 def main(args=None):
