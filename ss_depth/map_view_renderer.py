@@ -101,8 +101,7 @@ class MapViewRenderer:
       self._world_to_heading_up_pixel(occupancy_grid, robot_pose, point.x, point.y)
       for point in path_points
     ]
-    for start, end in zip(pixels, pixels[1:]):
-      self._draw_dotted_line(view, start, end, (0, 170, 255), 2)
+    self._draw_dotted_polyline(view, pixels, (0, 170, 255), 2)
 
   def _draw_goal(
     self,
@@ -189,19 +188,48 @@ class MapViewRenderer:
     )
 
   def _draw_dotted_line(self, view, start: tuple[int, int], end: tuple[int, int], color, thickness):
+    self._draw_dotted_polyline(view, [start, end], color, thickness)
+
+  def _draw_dotted_polyline(self, view, points: list[tuple[int, int]], color, thickness):
+    distance_offset = 0.0
+    for start, end in zip(points, points[1:]):
+      distance_offset = self._draw_dotted_segment(
+        view,
+        start,
+        end,
+        color,
+        thickness,
+        distance_offset,
+      )
+
+  def _draw_dotted_segment(
+    self,
+    view,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    color,
+    thickness,
+    distance_offset: float,
+  ) -> float:
     start_point = np.array(start, dtype=np.float32)
     end_point = np.array(end, dtype=np.float32)
     distance = float(np.linalg.norm(end_point - start_point))
     if distance == 0:
-      return
+      return distance_offset
 
-    dot_gap = 12
-    steps = max(1, int(distance / dot_gap))
+    dash_length = 12.0
+    gap_length = 12.0
+    pattern_length = dash_length + gap_length
+    steps = max(1, int(distance))
     for step in range(steps):
-      if step % 2 != 0:
+      segment_start = distance * step / steps
+      segment_end = distance * (step + 1) / steps
+      pattern_position = (distance_offset + segment_start) % pattern_length
+      if pattern_position >= dash_length:
         continue
-      t1 = step / steps
-      t2 = min((step + 1) / steps, 1.0)
+      t1 = segment_start / distance
+      t2 = segment_end / distance
       p1 = start_point + (end_point - start_point) * t1
       p2 = start_point + (end_point - start_point) * t2
       cv2.line(view, tuple(p1.astype(int)), tuple(p2.astype(int)), color, thickness)
+    return distance_offset + distance
